@@ -136,11 +136,8 @@ public:
     }
     
     string createHMAC(string key, string data){
-        
         unsigned int diglen;
-
         unsigned char result[EVP_MAX_MD_SIZE];
-
         unsigned char* digest = HMAC(EVP_sha256(),
                       reinterpret_cast<const unsigned char*>(key.c_str()), key.length(),
                       reinterpret_cast<const unsigned char*>(data.c_str()), data.length(),
@@ -150,13 +147,13 @@ public:
         for (int i = 0; i < diglen; i++){
             ss << std::hex << std::setw(2)  << (unsigned int)digest[i];
         }
-
         return (ss.str());
     }
     
-    int setRequest(string req, ofHttpRequest::Method method){
+    int setRequest(string req, ofHttpRequest::Method method, int time = 0){
         ofHttpRequest request(req, "");
         request.method = method;
+        if(time != 0) { request.timeoutSeconds = time; }
         requestMachine = request;
         return request.getId();
     }
