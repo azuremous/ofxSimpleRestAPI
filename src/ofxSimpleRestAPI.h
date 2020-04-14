@@ -73,16 +73,12 @@ protected:
         std::string body = request.body;
         // set body if there's any
         if(request.body!=""){
-    //        curl_easy_setopt(curl.get(), CURLOPT_UPLOAD, 1L); // Tis does PUT instead of POST
             curl_easy_setopt(curl.get(), CURLOPT_POSTFIELDSIZE, request.body.size());
             curl_easy_setopt(curl.get(), CURLOPT_POSTFIELDS, nullptr);
-            //curl_easy_setopt(curl.get(), CURLOPT_POSTFIELDS, request.body.c_str());
             curl_easy_setopt(curl.get(), CURLOPT_READFUNCTION, readBody_cb);
             curl_easy_setopt(curl.get(), CURLOPT_READDATA, &body);
         }else{
-    //        curl_easy_setopt(curl.get(), CURLOPT_UPLOAD, 0L);
             curl_easy_setopt(curl.get(), CURLOPT_POSTFIELDSIZE, 0);
-            //curl_easy_setopt(curl.get(), CURLOPT_POSTFIELDS, nullptr);
             curl_easy_setopt(curl.get(), CURLOPT_READFUNCTION, nullptr);
             curl_easy_setopt(curl.get(), CURLOPT_READDATA, nullptr);
         }
@@ -135,10 +131,34 @@ public:
         curl = std::unique_ptr<CURL, void(*)(CURL*)>(curl_easy_init(), curl_easy_cleanup);
     }
     
-    string createHMAC(string key, string data){
+    void setRequestBody(string title, string body){
+        requestMachine.body = title +"="+body;
+    }
+    
+    void setRequestBody(string body){
+        requestMachine.body = body;
+    }
+    
+    int setRequest(string req, ofHttpRequest::Method method, int time = 0, string contentType = "", string header = ""){
+        ofHttpRequest request(req, header);
+        request.method = method;
+        request.contentType = contentType;
+        if(time != 0) { request.timeoutSeconds = time; }
+        requestMachine = request;
+        return request.getId();
+    }
+    
+    int getResponseStatus(){
+        ofHttpResponse response(handleRequest(requestMachine));
+        int status = response.status;
+        data = response.data;
+        return response.status;
+    }
+    
+    string createHMAC(string key, string data, const EVP_MD *type = EVP_sha512()){
         unsigned int diglen;
         unsigned char result[EVP_MAX_MD_SIZE];
-        unsigned char* digest = HMAC(EVP_sha256(),
+        unsigned char* digest = HMAC(type,
                       reinterpret_cast<const unsigned char*>(key.c_str()), key.length(),
                       reinterpret_cast<const unsigned char*>(data.c_str()), data.length(),
                       result, &diglen);
@@ -150,28 +170,15 @@ public:
         return (ss.str());
     }
     
-    int setRequest(string req, ofHttpRequest::Method method, int time = 0){
-        ofHttpRequest request(req, "");
-        request.method = method;
-        if(time != 0) { request.timeoutSeconds = time; }
-        requestMachine = request;
-        return request.getId();
+    string getData(){
+        return data.getText();
     }
     
-    void setRequestBody(string title, string body){
-        requestMachine.body = title+"="+body;
-    }
-    
-    int getResponseStatus(){
-        ofHttpResponse response(handleRequest(requestMachine));
-        int status = response.status;
-        if(status == 200){ data = response.data; }
-        return response.status;
-    }
-    
-    string getResult(string word){
-        auto result = ofJson::parse(data.getText());
-        return result[word];
+    template <typename T> T getData(string word, string owner = ""){
+        if(owner == "") { owner = data.getText(); }
+        auto _data = ofJson::parse(owner);
+        T result = static_cast<T>(_data[word]);
+        return result;
     }
     
 };
