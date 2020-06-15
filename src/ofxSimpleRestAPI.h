@@ -49,6 +49,7 @@ private:
     std::unique_ptr<CURL, void(*)(CURL*)> curl;
     ofHttpRequest requestMachine;
     ofBuffer data;
+    string errorString;
 protected:
     //https://forum.openframeworks.cc/t/sending-put-instead-of-post-request/29860/2
     ofHttpResponse handleRequest(const ofHttpRequest & request) {
@@ -152,6 +153,7 @@ public:
         ofHttpResponse response(handleRequest(requestMachine));
         int status = response.status;
         data = response.data;
+        errorString = response.error;
         return response.status;
     }
     
@@ -173,6 +175,8 @@ public:
     string getData(){
         return data.getText();
     }
+    
+    string getError() const { return errorString; }
     
     template <typename T> T getData(string word, string owner = ""){
         if(owner == "") { owner = data.getText(); }
