@@ -176,6 +176,20 @@ public:
         return data.getText();
     }
     
+    string encodeString(const string &s){
+        string result = s;
+            if(curl) {
+                char *output = curl_easy_escape(curl.get(), result.c_str(), result.size());
+              if(output) {
+                  result = output;
+                  printf("Encoded: %s\n", output);
+                  curl_free(output);
+                  cout<<"chage:"<<result<<endl;
+              }
+            }
+            return result;
+    }
+    
     string getError() const { return errorString; }
     
     template <typename T> T getData(string word, string owner = ""){
