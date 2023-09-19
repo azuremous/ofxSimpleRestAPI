@@ -50,12 +50,32 @@ private:
     ofHttpRequest requestMachine;
     ofBuffer data;
     string errorString;
+    string certificatePath;
+    string keyPath;
+    string password;
+    bool useCertificate;
+    bool useSSL;
+    bool showVerbose;
 protected:
     //https://forum.openframeworks.cc/t/sending-put-instead-of-post-request/29860/2
     ofHttpResponse handleRequest(const ofHttpRequest & request) {
         curl_slist *headers = nullptr;
-        curl_easy_setopt(curl.get(), CURLOPT_SSL_VERIFYPEER, 0);
-        curl_easy_setopt(curl.get(), CURLOPT_SSL_VERIFYHOST, 0);
+        if(showVerbose){
+            curl_easy_setopt(curl.get(), CURLOPT_VERBOSE, 1L);
+        }
+
+        if(useCertificate){
+            curl_easy_setopt(curl.get(), CURLOPT_SSLCERT, certificatePath.c_str());
+            curl_easy_setopt(curl.get(), CURLOPT_SSLKEY, keyPath.c_str());
+            if(password != ""){
+                curl_easy_setopt(curl.get(), CURLOPT_KEYPASSWD, password.c_str());
+            }
+        }else{
+            if(!useSSL){
+                curl_easy_setopt(curl.get(), CURLOPT_SSL_VERIFYPEER, 0);
+                curl_easy_setopt(curl.get(), CURLOPT_SSL_VERIFYHOST, 0);
+            }
+        }
         curl_easy_setopt(curl.get(), CURLOPT_URL, request.url.c_str());
 
         // always follow redirections
@@ -94,7 +114,6 @@ protected:
         if(request.timeoutSeconds>0){
             curl_easy_setopt(curl.get(), CURLOPT_TIMEOUT, request.timeoutSeconds);
         }
-
         // start request and receive response
         ofHttpResponse response(request, 0, "");
         CURLcode err = CURLE_OK;
@@ -125,26 +144,32 @@ protected:
     }
     
 public:
-    ofxSimpleRestAPI():curl(nullptr, nullptr){
+    ofxSimpleRestAPI():curl(nullptr, nullptr),useCertificate(false),useSSL(false),showVerbose(false){
         if(!curlInited){
              curl_global_init(CURL_GLOBAL_ALL);
         }
         curl = std::unique_ptr<CURL, void(*)(CURL*)>(curl_easy_init(), curl_easy_cleanup);
     }
     
-    void setRequestBody(string title, string body){
+    void setRequestBody(const string &title, const string &body){
         requestMachine.body = title +"="+body;
     }
     
-    void setRequestBody(string body){
+    void setRequestBody(const string &body){
         requestMachine.body = body;
     }
     
-    int setRequest(string req, ofHttpRequest::Method method, int time = 0, string contentType = "", string header = ""){
+    int setRequest(const string &req, const ofHttpRequest::Method &method, const int &time = 0, const string &contentType = "", const string &header = ""){
+        int point = req.find("https:");
+        if(point == 0){
+            useSSL = true;
+        }
         ofHttpRequest request(req, header);
         request.method = method;
         request.contentType = contentType;
-        if(time != 0) { request.timeoutSeconds = time; }
+        if(time != 0) {
+            request.timeoutSeconds = time;
+        }
         requestMachine = request;
         return request.getId();
     }
@@ -155,6 +180,26 @@ public:
         data = response.data;
         errorString = response.error;
         return response.status;
+    }
+    
+    void setToUseSSL(bool use = true){
+        useSSL = use;
+    }
+    
+    void showDetailLog(){
+        showVerbose = true;
+    }
+    
+    void saveToFile(string name){
+        requestMachine.name = name;
+        requestMachine.saveTo = true;
+    }
+    
+    void setCertification(string certificate, string key, string pass = ""){
+        certificatePath = certificate;
+        keyPath = key;
+        password = pass;
+        useCertificate = true;
     }
     
     string createHMAC(string key, string data, const EVP_MD *type = EVP_sha512()){
@@ -182,9 +227,7 @@ public:
                 char *output = curl_easy_escape(curl.get(), result.c_str(), result.size());
               if(output) {
                   result = output;
-                  printf("Encoded: %s\n", output);
                   curl_free(output);
-                  cout<<"chage:"<<result<<endl;
               }
             }
             return result;
