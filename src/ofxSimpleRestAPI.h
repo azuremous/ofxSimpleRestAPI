@@ -8,8 +8,7 @@ Created by Jung un Kim a.k.a azuremous on 2/12/20.
 #pragma once
 
 #include <curl/curl.h>
-#include "hmac.h"
-#include "evp.h"
+
 
 namespace{
     size_t saveToFile_cb(void *buffer, size_t size, size_t nmemb, void *userdata){
@@ -51,6 +50,7 @@ private:
     ofBuffer data;
     string errorString;
     string certificatePath;
+    string caPath;
     string keyPath;
     string password;
     bool useCertificate;
@@ -62,6 +62,11 @@ protected:
         curl_slist *headers = nullptr;
         if(showVerbose){
             curl_easy_setopt(curl.get(), CURLOPT_VERBOSE, 1L);
+        }
+
+        if (caPath != "") {
+            cout << "set ca info:" << caPath << endl;
+            curl_easy_setopt(curl.get(), CURLOPT_CAINFO, caPath.c_str());
         }
 
         if(useCertificate){
@@ -144,11 +149,15 @@ protected:
     }
     
 public:
-    ofxSimpleRestAPI():curl(nullptr, nullptr),useCertificate(false),useSSL(false),showVerbose(false){
+    ofxSimpleRestAPI():curl(nullptr, nullptr),useCertificate(false),useSSL(false),showVerbose(false), caPath("") {
         if(!curlInited){
              curl_global_init(CURL_GLOBAL_ALL);
         }
         curl = std::unique_ptr<CURL, void(*)(CURL*)>(curl_easy_init(), curl_easy_cleanup);
+    }
+
+    void setCAPath(string path) {
+        caPath = path;
     }
     
     void setRequestBody(const string &title, const string &body){
@@ -173,7 +182,7 @@ public:
         requestMachine = request;
         return request.getId();
     }
-    
+
     int getResponseStatus(){
         ofHttpResponse response(handleRequest(requestMachine));
         int status = response.status;
@@ -200,21 +209,6 @@ public:
         keyPath = key;
         password = pass;
         useCertificate = true;
-    }
-    
-    string createHMAC(string key, string data, const EVP_MD *type = EVP_sha512()){
-        unsigned int diglen;
-        unsigned char result[EVP_MAX_MD_SIZE];
-        unsigned char* digest = HMAC(type,
-                      reinterpret_cast<const unsigned char*>(key.c_str()), key.length(),
-                      reinterpret_cast<const unsigned char*>(data.c_str()), data.length(),
-                      result, &diglen);
-        std::stringstream ss;
-        ss << std::hex << std::setfill('0');
-        for (int i = 0; i < diglen; i++){
-            ss << std::hex << std::setw(2)  << (unsigned int)digest[i];
-        }
-        return (ss.str());
     }
     
     string getData(){
