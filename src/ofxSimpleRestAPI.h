@@ -8,7 +8,8 @@ Created by Jung un Kim a.k.a azuremous on 2/12/20.
 #pragma once
 
 #include <curl/curl.h>
-
+#include <openssl/hmac.h>
+#include <openssl/evp.h>
 
 namespace{
     size_t saveToFile_cb(void *buffer, size_t size, size_t nmemb, void *userdata){
@@ -47,6 +48,7 @@ class ofxSimpleRestAPI {
 private:
     std::unique_ptr<CURL, void(*)(CURL*)> curl;
     ofHttpRequest requestMachine;
+	struct curl_httppost *formpost;
     ofBuffer data;
     string errorString;
     string certificatePath;
@@ -55,7 +57,9 @@ private:
     string password;
     bool useCertificate;
     bool useSSL;
+	bool useDataPost;
     bool showVerbose;
+
 protected:
     //https://forum.openframeworks.cc/t/sending-put-instead-of-post-request/29860/2
     ofHttpResponse handleRequest(const ofHttpRequest & request) {
@@ -68,8 +72,10 @@ protected:
             cout << "set ca info:" << caPath << endl;
             curl_easy_setopt(curl.get(), CURLOPT_CAINFO, caPath.c_str());
         }
-
+		
         if(useCertificate){
+			cout << "set certificatePath:" << certificatePath << endl;
+			cout << "set keyPath:" << keyPath << endl;
             curl_easy_setopt(curl.get(), CURLOPT_SSLCERT, certificatePath.c_str());
             curl_easy_setopt(curl.get(), CURLOPT_SSLKEY, keyPath.c_str());
             if(password != ""){
@@ -111,9 +117,14 @@ protected:
         if(request.method == ofHttpRequest::GET){
             curl_easy_setopt(curl.get(), CURLOPT_HTTPGET, 1);
             curl_easy_setopt(curl.get(), CURLOPT_POST, 0);
-        }else{
-            curl_easy_setopt(curl.get(), CURLOPT_POST, 1);
-            curl_easy_setopt(curl.get(), CURLOPT_HTTPGET, 0);
+        }else{//POST
+			if (useDataPost) {
+				curl_easy_setopt(curl.get(), CURLOPT_HTTPPOST, formpost);
+			}
+			else {
+				curl_easy_setopt(curl.get(), CURLOPT_POST, 1);
+				curl_easy_setopt(curl.get(), CURLOPT_HTTPGET, 0);
+			}
         }
 
         if(request.timeoutSeconds>0){
@@ -154,6 +165,7 @@ public:
              curl_global_init(CURL_GLOBAL_ALL);
         }
         curl = std::unique_ptr<CURL, void(*)(CURL*)>(curl_easy_init(), curl_easy_cleanup);
+		formpost = NULL;
     }
 
     void setCAPath(string path) {
@@ -167,6 +179,18 @@ public:
     void setRequestBody(const string &body){
         requestMachine.body = body;
     }
+
+	void setRequestData(const ofBuffer & data, const string &copyName, const string &fileName) {
+		struct curl_httppost *lastptr = NULL;
+		curl_formadd(&formpost, &lastptr,
+			CURLFORM_COPYNAME, copyName.c_str(),
+			CURLFORM_BUFFER, fileName.c_str(),
+			CURLFORM_BUFFERPTR, data.getData(),
+			CURLFORM_BUFFERLENGTH, data.size(),
+			CURLFORM_END
+		);
+		useDataPost = true;
+	}
     
     int setRequest(const string &req, const ofHttpRequest::Method &method, const int &time = 0, const string &contentType = "", const string &header = ""){
         int point = req.find("https:");
@@ -226,6 +250,21 @@ public:
             }
             return result;
     }
+
+	string createHMAC(const string &key, const string &data, const EVP_MD * type = EVP_sha512()) {
+		unsigned int diglen;
+		unsigned char result[EVP_MAX_MD_SIZE];
+
+		unsigned char* digest = HMAC(type, reinterpret_cast<const unsigned char*>(key.c_str()), key.length(), reinterpret_cast<const unsigned char*>(data.c_str()), data.length(),result, &diglen);
+
+		stringstream ss;
+		ss << hex << setfill('0');
+		for (int i = 0; i < diglen; i++) {
+			ss << hex << setw(2) << static_cast<unsigned int>(digest[i]);
+		}
+
+		return ss.str();
+	}
     
     string getError() const { return errorString; }
     
