@@ -1,6 +1,6 @@
 /*-----------------------------------------------------------/
 ofxSimpleRestAPI.h
-
+windows
 github.com/azuremous
 Created by Jung un Kim a.k.a azuremous on 2/12/20.
 /----------------------------------------------------------*/
@@ -69,13 +69,10 @@ protected:
         }
 
         if (caPath != "") {
-            cout << "set ca info:" << caPath << endl;
             curl_easy_setopt(curl.get(), CURLOPT_CAINFO, caPath.c_str());
         }
 		
         if(useCertificate){
-			cout << "set certificatePath:" << certificatePath << endl;
-			cout << "set keyPath:" << keyPath << endl;
             curl_easy_setopt(curl.get(), CURLOPT_SSLCERT, certificatePath.c_str());
             curl_easy_setopt(curl.get(), CURLOPT_SSLKEY, keyPath.c_str());
             if(password != ""){
@@ -102,10 +99,10 @@ protected:
 
         curl_easy_setopt(curl.get(), CURLOPT_HTTPHEADER, headers);
 
-        std::string body = request.body;
+        string body = request.body;
         // set body if there's any
-        if(request.body!=""){
-            curl_easy_setopt(curl.get(), CURLOPT_POSTFIELDSIZE, request.body.size());
+        if(body!=""){
+            curl_easy_setopt(curl.get(), CURLOPT_POSTFIELDSIZE, body.size());
             curl_easy_setopt(curl.get(), CURLOPT_POSTFIELDS, nullptr);
             curl_easy_setopt(curl.get(), CURLOPT_READFUNCTION, readBody_cb);
             curl_easy_setopt(curl.get(), CURLOPT_READDATA, &body);
@@ -168,8 +165,37 @@ public:
 		formpost = NULL;
     }
 
-    void setCAPath(string path) {
+    void clear(){
+        requestMachine.body = "";
+        useDataPost = false;
+    }
+
+    void showDetailLog() {
+        showVerbose = true;
+    }
+
+    void saveToFile(const string &name) {
+        requestMachine.name = name;
+        requestMachine.saveTo = true;
+    }
+
+    void setCAPath(const string &path) {
         caPath = path;
+    }
+
+    void setToUseSSL(bool use = true) {
+        useSSL = use;
+    }
+
+    void setCertification(string certificate, string key, string pass = "") {
+        certificatePath = certificate;
+        keyPath = key;
+        password = pass;
+        useCertificate = true;
+    }
+
+    void addHeader(const string &key, const string &value){
+        requestMachine.headers[key] = value;
     }
     
     void setRequestBody(const string &title, const string &body){
@@ -209,35 +235,14 @@ public:
 
     int getResponseStatus(){
         ofHttpResponse response(handleRequest(requestMachine));
-        int status = response.status;
         data = response.data;
         errorString = response.error;
         return response.status;
     }
     
-    void setToUseSSL(bool use = true){
-        useSSL = use;
-    }
-    
-    void showDetailLog(){
-        showVerbose = true;
-    }
-    
-    void saveToFile(string name){
-        requestMachine.name = name;
-        requestMachine.saveTo = true;
-    }
-    
-    void setCertification(string certificate, string key, string pass = ""){
-        certificatePath = certificate;
-        keyPath = key;
-        password = pass;
-        useCertificate = true;
-    }
-    
-    string getData(){
-        return data.getText();
-    }
+    string getData() const { return data.getText(); }
+
+    string getError() const { return errorString; }
     
     string encodeString(const string &s){
         string result = s;
@@ -249,6 +254,13 @@ public:
               }
             }
             return result;
+    }
+
+    template <typename T> T getData(string word, string owner = ""){
+        if(owner == "") { owner = data.getText(); }
+        auto _data = ofJson::parse(owner);
+        T result = _data[word].get<T>();
+        return result;
     }
 
 	string createHMAC(const string &key, const string &data, const EVP_MD * type = EVP_sha512()) {
@@ -265,14 +277,5 @@ public:
 
 		return ss.str();
 	}
-    
-    string getError() const { return errorString; }
-    
-    template <typename T> T getData(string word, string owner = ""){
-        if(owner == "") { owner = data.getText(); }
-        auto _data = ofJson::parse(owner);
-        T result = static_cast<T>(_data[word]);
-        return result;
-    }
     
 };
